@@ -1,3 +1,7 @@
+/*
+ * This code is from README or README.instructions
+ */
+
 #ifndef UTIL_C
 #define UTIL_C
 char myerrbuf[128];
