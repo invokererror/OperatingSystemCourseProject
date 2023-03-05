@@ -2,8 +2,8 @@
  * This code is from README or README.instructions
  */
 
-#ifndef UTIL_C
-#define UTIL_C
+#ifndef PANIC_C
+#define PANIC_C
 char myerrbuf[128];
 
 panic(s)
@@ -15,5 +15,6 @@ register char *s;
 		;
 
 	asm("  trap    #0");  /* stop the simulator */
+	/* HALT(); */
 }
 #endif

@@ -1,0 +1,323 @@
+/*
+ * This code is my own work, it was written without consulting code written by other students (Yiwei Zhu)
+ */
+#include "../../h/syscall.h"
+#include "../../h/types.h"
+#include "../../h/procq.h"
+#include "../../h/vpop.h"
+#include "../../h/traps.e"
+#include "../../h/utils.e"
+#include "../../util/utils.c"
+
+/* register int d2 asm("%d2"); */
+/* register int d3 asm("%d3"); */
+/* register int d4 asm("%d4"); */
+
+
+
+
+int
+creatproc(state_t *old)
+{
+	proc_t *new_proc = allocProc();
+	if (new_proc == (proc_t*) ENULL)
+	{
+		old->s_r[2] = -1;	/* d2 = -1; */
+		return 1;
+	}
+	new_proc->p_s = *(state_t*) old->s_r[4];	/* from d4 */
+	/* process tree */
+	proc_t *running_proc = headQueue(rq_tl);
+	new_proc->parent = running_proc;
+	new_proc->sibling = (proc_t*) ENULL;
+	new_proc->child = (proc_t*) ENULL;
+	if (running_proc->child != (proc_t*) ENULL)
+	{
+		new_proc->sibling = running_proc->child->sibling;
+		running_proc->child->sibling = new_proc;
+	} else
+	{
+		running_proc->child = new_proc;
+	}
+	/* put on RQ */
+	insertProc(&rq_tl, new_proc);
+	old->s_r[2] = 0;	/* d2 = 0; */
+	return 0;
+}
+
+
+/**
+ * recursively terminate process and descendents.
+ *
+ * `pproc`: parent process
+ */
+int
+killproc_aux(proc_t *pproc)
+{
+	if (pproc == (proc_t*) ENULL)
+	{
+		return 0;
+	}
+	proc_t *pproc_sib = pproc->sibling;
+	proc_t *pproc_chd = pproc->child;
+	/* kill pproc */
+	/* in RQ? */
+	if (outProc(&rq_tl, pproc) == (proc_t*) ENULL)
+	{
+		/* not found in RQ */
+		/* blocked by some sems */
+		/* update those sems */
+		/* DISCUSS: add following code to outBlocked function? */
+		int i;
+		for (i = 0; i < SEMMAX; i++)
+		{
+			int *sem_addr = pproc->semvec[i];
+			if (sem_addr != (int*) ENULL)
+			{
+				(*sem_addr)++;
+			}
+		}
+		/* remove `pproc` from semqueue for all its blocked sems */
+		/* assumption: outBlocked works for multiple blocked sems per process */
+		if (outBlocked(pproc) == (proc_t*) ENULL)
+		{
+			/* not success */
+			panic("process on RQ AND blocked by some sem!");
+			return 1;
+		}
+	} else
+	{
+		/* in RQ */
+		/* remove the process from RQ */
+		if (outProc(&rq_tl, pproc) == (proc_t*) ENULL)
+		{
+			panic("syscall.killproc_aux:`pproc` should be in RQ!");
+			return 1;
+		}
+	}
+	/* recurse */
+	killproc_aux(pproc_chd);
+	killproc_aux(pproc_sib);
+	/* update process tree */
+	/* pproc->parent->child = (proc_t*) ENULL; */
+	/* safe net. should be fine without */
+	pproc->child = (proc_t*) ENULL;
+	pproc->sibling = (proc_t*) ENULL;
+	pproc->parent = (proc_t*) ENULL;
+	/* finally kill */
+	freeProc(pproc);
+	return 0;
+}
+
+
+/**
+ * the function that actually kills a process
+ */
+int
+killproc_real(proc_t *p)
+{
+	proc_t *p_parent = p->parent;
+	/* dirty trick: set p->sib to ENULL to facilitate recursion */
+	p->sibling = (proc_t*) ENULL;
+	killproc_aux(p);
+	/* update process tree */
+	if (p_parent == (proc_t*) ENULL)
+	{
+		/* killing p1 */
+		/* impossible since p1 is uninterruptable */
+		panic("killproc: killing p1 but should not");
+		return 1;
+	}
+	if (p_parent->child == p)
+	{
+		p_parent->child = (proc_t*) ENULL;
+	} else
+	{
+		/* change sibling link adjacent to `p` */
+		proc_t *p_prev;
+		for (p_prev = p_parent->child;
+			 p_prev->sibling != p;
+			 p_prev = p_prev->sibling)
+			;
+		p_prev->sibling = p->sibling;
+	}
+	return 0;
+}
+
+
+int
+killproc(state_t *old)
+{
+	proc_t *running_proc = headQueue(rq_tl);
+	return killproc_real(running_proc);
+}
+
+
+int
+semop(state_t *old)
+{
+	/* get d3, d4 from old area */
+	const int d3 = old->s_r[3];
+	const int d4 = old->s_r[4];
+	proc_t *caller_process = headQueue(rq_tl);
+	/* save old area to caller process */
+	caller_process->p_s = *old;
+	/* for each vpop */
+	int i;
+	for (i = 0; i < d3; i++)
+	{
+		vpop *vp = &(((vpop*) d4)[i]);
+		if (vp->op == LOCK)
+		{
+			(*vp->sem)--;
+			/* if sem now blockes calling process, get it off (head of) RQ */
+			if ((*vp->sem) < 0)
+			{
+				/* P causes blocking */
+				/* get off RQ if on RQ */
+				proc_t *useless = headQueue(rq_tl);
+				if (useless == caller_process)
+				{
+					/* `caller_process` on RQ */
+					if (removeProc(&rq_tl) != caller_process)
+					{
+						panic("moving wrong process from RQ");
+						return 1;
+					}
+					/* update proc_t->state_t */
+					caller_process->p_s = *old;
+					/* update cpu_time */
+					long now;
+					STCK(&now);
+					caller_process->cpu_time += now - caller_process->tdck;
+					caller_process->tdck = 0;
+					/* new head */
+				}
+				/* no new head? deadlock */
+				if (headQueue(rq_tl) == (proc_t*) ENULL)
+				{
+					panic("phase 2 deadlock");
+					return 1;
+				}
+				/* update proc_t */
+				/* caller_process->qcount++; */
+				/* insertSemvec(caller_process, vp->sem); */
+				/* `caller_process` onto sem queue */
+				insertBlocked(vp->sem, caller_process);
+			}
+		} else if (vp->op == UNLOCK)
+		{
+			(*vp->sem)++;
+			/* pop head process from sem queue */
+			proc_t *sem_q_hd = removeBlocked(vp->sem);
+			/* update proc_t */
+			/*
+			 * CAVEAT: might need to change ->p_link!
+			 * do nothing here
+			 */
+			if (sem_q_hd == (proc_t*) ENULL)
+			{
+				/* ok, removeBlocked treated removing no process blocked from sem as error. */
+				/* but here it is not necessarily error */
+				continue;
+			}
+			/* sem_q_hd->qcount--; */
+			/* removeSemvec(sem_q_hd, vp->sem); */
+			/* put onto RQ if no sem blocking */
+			if (sem_q_hd->qcount == 0)
+			{
+				/* safe net */
+				#ifndef NDEBUG
+				int assert_pass = 1;
+				int i;
+				for (i = 0; i < SEMMAX; i++)
+				{
+					if (sem_q_hd->semvec[i] != (int*) ENULL)
+					{
+						assert_pass = 0;
+						break;
+					}
+				}
+				if (!assert_pass)
+				{
+					panic("assert fail: semvec not in sync with qcount");
+					return 1;
+				}
+				#endif
+				/* put onto RQ */
+				insertProc(&rq_tl, sem_q_hd);
+			}
+			
+		} else
+		{
+			panic("switch vp->op error");
+			return 1;
+		}
+	}
+	/* resume to user space */
+	schedule();
+	return 0;
+}
+
+
+int
+notused(state_t *old)
+{
+	HALT();
+	return 1;
+}
+
+
+int
+trapstate(state_t *old)
+{
+	proc_t *caller_proc = headQueue(rq_tl);
+	/* repeat SYS5 call? */
+	/* partial checking */
+	if (caller_proc->sys_new != (state_t*) ENULL)
+	{
+		/* has called SYS5 before */
+		/* terminate process */
+		killproc_real(caller_proc);
+		return 1;
+	}
+	/* main */
+	caller_proc->prog_old = (state_t*) BEGINTRAP;
+	caller_proc->prog_new = (state_t*) (BEGINTRAP + 76);
+	caller_proc->mm_old = (state_t*) (BEGINTRAP + 76*2);
+	caller_proc->mm_new = (state_t*) (BEGINTRAP + 76*3);
+	caller_proc->sys_old = (state_t*) (BEGINTRAP + 76*4);
+	caller_proc->sys_new = (state_t*) (BEGINTRAP + 76*5);
+	return 0;
+}
+
+
+int
+getcputime(state_t *old)
+{
+	proc_t *running_proc = headQueue(rq_tl);
+	old->s_r[2] = (int) running_proc->cpu_time;	/* d2 = ... */
+	return 0;
+}
+
+
+int
+trapsysdefault(state_t *old)
+{
+	/*
+	 * pass up.
+	 * if SYS5'ed, then LDST sys_new
+	 */
+	proc_t *caller_proc = headQueue(rq_tl);
+	if (caller_proc->sys_new != (state_t*) ENULL)
+	{
+		/* has SYS5'ed */
+		/* pass up */
+		LDST(caller_proc->sys_new);
+	} else
+	{
+		/* terminate */
+		killproc_real(caller_proc);
+	}
+	return 0;
+}

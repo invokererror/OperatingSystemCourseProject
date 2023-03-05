@@ -30,20 +30,58 @@ initProc(void)
 	{
 		procTable[i].p_link[0].next = &procTable[i+1];
 		procTable[i].p_link[0].index = 0;
+		/* all other procTable[i].p_link[k] set to invalid. No NULL allowed! */
+		int k;
+		for (k = 1; k < SEMMAX; k++)
+		{
+			procTable[i].p_link[k].next = (proc_t*) ENULL;
+			procTable[i].p_link[k].index = -1;
+		}
 		procTable[i].qcount = 0;
 		int j;
 		for (j = 0; j < SEMMAX; j++)
 		{
-			procTable[i].semvec[j] = NULL;
+			procTable[i].semvec[j] = (int*) ENULL;
 		}
+		/* phase 2 addition */
+		procTable[i].parent = (proc_t*) ENULL;
+		procTable[i].sibling = (proc_t*) ENULL;
+		procTable[i].child = (proc_t*) ENULL;
+		procTable[i].cpu_time = 0L;
+		procTable[i].tdck = 0L;
+		procTable[i].sys_old = (state_t*) ENULL;
+		procTable[i].sys_new = (state_t*) ENULL;
+		procTable[i].prog_old = (state_t*) ENULL;
+		procTable[i].prog_new = (state_t*) ENULL;
+		procTable[i].mm_old = (state_t*) ENULL;
+		procTable[i].mm_new = (state_t*) ENULL;
 	}
 	procTable[MAXPROC-1].p_link[0].next = (proc_t *) ENULL;
 	procTable[MAXPROC-1].p_link[0].index = 0;
+	/* all other procTable[i].p_link[k] set to invalid. No NULL allowed! */
+	int k;
+	for (k = 1; k < SEMMAX; k++)
+	{
+		procTable[MAXPROC-1].p_link[k].next = (proc_t*) ENULL;
+		procTable[MAXPROC-1].p_link[k].index = -1;
+	}
 	procTable[MAXPROC-1].qcount = 0;
 	int j;
 	for (j = 0; j < SEMMAX; j++)
 	{
-		procTable[MAXPROC-1].semvec[j] = NULL;
+		procTable[MAXPROC-1].semvec[j] = (int*) ENULL;
+		/* phase 2 addition */
+		procTable[MAXPROC-1].parent = (proc_t*) ENULL;
+		procTable[MAXPROC-1].sibling = (proc_t*) ENULL;
+		procTable[MAXPROC-1].child = (proc_t*) ENULL;
+		procTable[MAXPROC-1].cpu_time = 0L;
+		procTable[MAXPROC-1].tdck = 0L;
+		procTable[MAXPROC-1].sys_old = (state_t*) ENULL;
+		procTable[MAXPROC-1].sys_new = (state_t*) ENULL;
+		procTable[MAXPROC-1].prog_old = (state_t*) ENULL;
+		procTable[MAXPROC-1].prog_new = (state_t*) ENULL;
+		procTable[MAXPROC-1].mm_old = (state_t*) ENULL;
+		procTable[MAXPROC-1].mm_new = (state_t*) ENULL;
 	}
 	/* init `procFree_h` */
 	procFree_h.next = &procTable[0];
@@ -89,8 +127,7 @@ insertProc(proc_link *tp, proc_t *p)
 		size_t vacant_ind;
 		for (vacant_ind = 0; vacant_ind < SEMMAX; vacant_ind++)
 		{
-			if (p->p_link[vacant_ind].next == (proc_t*) ENULL ||
-				p->p_link[vacant_ind].next == NULL)
+			if (p->p_link[vacant_ind].next == (proc_t*) ENULL)
 			{
 				/* smallest slot available */
 				break;
@@ -119,8 +156,7 @@ insertProc(proc_link *tp, proc_t *p)
 	size_t vacant_ind;
 	for (vacant_ind = 0; vacant_ind < SEMMAX; vacant_ind++)
 	{
-		if (p->p_link[vacant_ind].next == (proc_t*) ENULL ||
-			p->p_link[vacant_ind].next == NULL)
+		if (p->p_link[vacant_ind].next == (proc_t*) ENULL)
 			break;
 	}
 	if (vacant_ind >= SEMMAX)
@@ -146,7 +182,7 @@ insertProc(proc_link *tp, proc_t *p)
 proc_t *
 removeProc(proc_link *tp)
 {
-	if (tp == NULL || tp->next == (proc_t*) ENULL)
+	if (tp->next == (proc_t*) ENULL)
 	{
 		return (proc_t *) ENULL;
 	}
@@ -193,8 +229,8 @@ outProc(proc_link *tp, proc_t *p)
 	int q_ind, prev_ind;
 	bool_t visited_tail = FALSE;
 	for (q = tp->next, q_ind = tp->index,
-			 prev = NULL, prev_ind = -1;
-		 q != (proc_t*) ENULL && q != NULL &&
+			 prev = (proc_t*) ENULL, prev_ind = -1;
+		 q != (proc_t*) ENULL &&
 			 !(q == tp->next && visited_tail);
 		 prev = q, prev_ind = q_ind,
 			 q = q->p_link[q_ind].next,
@@ -207,9 +243,9 @@ outProc(proc_link *tp, proc_t *p)
 		if (q == p)
 		{
 			/* found the process in queue */
-			if (prev == NULL)
+			if (prev == (proc_t*) ENULL)
 			{
-				/* prev is NULL => `q` is tail of queue */
+				/* prev is ENULL => `q` is tail of queue */
 				if (q->p_link[q_ind].next == q &&
 					q->p_link[q_ind].index == q_ind)
 				{

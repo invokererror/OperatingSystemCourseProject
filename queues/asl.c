@@ -34,22 +34,22 @@ initSemd(void)
 		 i <= MAXPROC-2;
 		 i++)
 	{
-		semdTable[i].s_prev = NULL;
+		semdTable[i].s_prev = (semd_t*) ENULL;
 		semdTable[i].s_next = &semdTable[i+1];
-		semdTable[i].s_semAdd = (int*) NULL;
+		semdTable[i].s_semAdd = (int*) ENULL;
 		semdTable[i].s_link.index = ENULL;
-		semdTable[i].s_link.next = NULL;
+		semdTable[i].s_link.next = (proc_t*) ENULL;
 	}
 	/* set last node */
-	semdTable[MAXPROC-1].s_next = NULL;
-	semdTable[MAXPROC-1].s_prev = NULL;
-	semdTable[MAXPROC-1].s_semAdd = NULL;
+	semdTable[MAXPROC-1].s_next = (semd_t*) ENULL;
+	semdTable[MAXPROC-1].s_prev = (semd_t*) ENULL;
+	semdTable[MAXPROC-1].s_semAdd = (int*) ENULL;
 	semdTable[MAXPROC-1].s_link.index = ENULL;
-	semdTable[MAXPROC-1].s_link.next = NULL;
+	semdTable[MAXPROC-1].s_link.next = (proc_t*) ENULL;
 	/* set `semdFree_h` */
 	semdFree_h = &semdTable[0];
 	/* init ASL */
-	semd_h.head = NULL;
+	semd_h.head = (semd_t*) ENULL;
 	semd_h.aslSize = 0;
 }
 
@@ -61,7 +61,7 @@ initSemd(void)
 int
 headASL(void)
 {
-	return (semd_h.head == NULL || semd_h.head == (semd_t*) ENULL) || (semd_h.aslSize == 0) ? FALSE : TRUE;
+	return (semd_h.head == (semd_t*) ENULL) || (semd_h.aslSize == 0) ? FALSE : TRUE;
 }
 
 
@@ -119,7 +119,7 @@ headBlocked(int *semAdd)
 	}
 	proc_t *q_tail = semd->s_link.next;
 	int q_tail_ind = semd->s_link.index;
-	if (q_tail == (proc_t*) ENULL || q_tail == NULL)
+	if (q_tail == (proc_t*) ENULL)
 		return (proc_t*) ENULL;
 	return q_tail->p_link[q_tail_ind].next;
 }
@@ -207,7 +207,7 @@ insertSemD(semd_t *semd)
 	else
 	{
 		/* insert `semd` before cur, after cur->s_prev */
-		if (cur->s_prev == NULL || cur->s_prev == (semd_t*) ENULL)
+		if (cur->s_prev == (semd_t*) ENULL)
 		{
 			panic("Each semd in ASL should have been inited!");
 			return;
@@ -238,7 +238,7 @@ insertSemD(semd_t *semd)
 int
 pAlreadyInProcq(proc_link *tp, proc_t *p)
 {
-	if (tp->next == NULL || tp->next == (proc_t*) ENULL)
+	if (tp->next == (proc_t*) ENULL)
 	{
 		/* invalid `tp` */
 		return FALSE;
@@ -278,7 +278,7 @@ insertBlocked(int *semAdd, proc_t *p)
 		/* `semAdd` not in ASL */
 		/* allocate new semd from free list */
 		semd_t *newSemD = semdFree_h;
-		if (newSemD == (semd_t*) ENULL || newSemD == NULL)
+		if (newSemD == (semd_t*) ENULL)
 		{
 			/* no semd available */
 			return TRUE;
@@ -293,7 +293,7 @@ insertBlocked(int *semAdd, proc_t *p)
 		int empty_slot;
 		for (empty_slot = 0; empty_slot < SEMMAX; empty_slot++)
 		{
-			if (p->p_link[empty_slot].next == NULL || p->p_link[empty_slot].next == (proc_t*) ENULL)
+			if (p->p_link[empty_slot].next == (proc_t*) ENULL)
 				break;
 		}
 		if (empty_slot >= SEMMAX)
@@ -311,7 +311,7 @@ insertBlocked(int *semAdd, proc_t *p)
 			 empty_slot < SEMMAX;
 			 empty_slot++)
 		{
-			if (p->semvec[empty_slot] == NULL || p->semvec[empty_slot] == (int*) ENULL)
+			if (p->semvec[empty_slot] == (int*) ENULL)
 				break;
 		}
 		if (empty_slot >= SEMMAX)
@@ -337,7 +337,7 @@ insertBlocked(int *semAdd, proc_t *p)
 		 empty_slot < SEMMAX;
 		 empty_slot++)
 	{
-		if (p->semvec[empty_slot] == NULL || p->semvec[empty_slot] == (int*) ENULL)
+		if (p->semvec[empty_slot] == (int*) ENULL)
 			break;
 	}
 	if (empty_slot >= SEMMAX)
@@ -383,11 +383,11 @@ removeBlocked(int *semAdd)
 	}
 	res->semvec[i] = (int*) ENULL;
 	/* procq becomes empty? */
-	if (semd->s_link.next == NULL || semd->s_link.next == (proc_t*) ENULL)
+	if (semd->s_link.next == (proc_t*) ENULL)
 	{
 		/* process queue blocked by `semAdd` now empty */
 		/* remove `semd` from ASL */
-		if (semd->s_prev == NULL || semd->s_prev == (semd_t*) ENULL || semd->s_next == NULL || semd->s_next == (semd_t*) ENULL)
+		if (semd->s_prev == (semd_t*) ENULL || semd->s_next == (semd_t*) ENULL)
 		{
 			panic("Trying to remove a semd from an empty ASL!");
 			return (proc_t*) ENULL;
@@ -412,7 +412,10 @@ removeBlocked(int *semAdd)
 		semd->s_link.index = ENULL;
 		semd->s_link.next = (proc_t*) ENULL;
 		/* update `semdFree_h` */
-		semdFree_h->s_prev = semd;
+		if (semdFree_h != (semd_t*) ENULL)
+		{
+			semdFree_h->s_prev = semd;
+		}
 		semdFree_h = semd;
 	}
 	return res;

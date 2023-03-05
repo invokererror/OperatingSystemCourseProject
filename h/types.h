@@ -1,3 +1,5 @@
+#ifndef TYPES_H
+#define TYPES_H
 /* virtual address */
 typedef struct vad_t {
 	unsigned un       :8,		/* segment number */
@@ -91,3 +93,5 @@ typedef	struct {
 	int	io_len;
 	int	io_sta;
 } iores_t;
+
+#endif

@@ -27,9 +27,13 @@
 
 /* Exception Vector Numbers */
 #define BUSERROR        2
-falcon%
-falcon%
-falcon%cat const.h 
+/*
+ * the following falcon raised compile error. uncommented them.
+ */
+/* falcon% */
+/* falcon% */
+/* falcon%cat const.h  */
+
 /* Hardware constants */
 #define	PAGESIZE	512	/* page size in bytes */
 #define	BEGINTRAP	0x800	/* beginning of trap areas */
