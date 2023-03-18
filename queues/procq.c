@@ -186,10 +186,10 @@ removeProc(proc_link *tp)
 	{
 		return (proc_t *) ENULL;
 	}
-	/* `tp` points to itself => 1 element in queue */
 	if (tp->next->p_link[tp->index].next == tp->next &&
 		tp->next->p_link[tp->index].index == tp->index)
 	{
+		/* `tp` points to itself => 1 element in queue */
 		proc_t *res = tp->next;
 		/* update struct of removed process */
 		res->qcount--;
@@ -264,16 +264,16 @@ outProc(proc_link *tp, proc_t *p)
 				proc_t *second_tl;
 				int second_tl_ind;
 				int old_second_tl_ind;
-				for (second_tl = q->p_link[q_ind].next,
-						 second_tl_ind = q->p_link[q_ind].index,
-						 old_second_tl_ind = -1;
-					 second_tl->p_link[second_tl_ind].next != q;
-					 second_tl_ind = second_tl->p_link[second_tl_ind].index,
-						 second_tl = second_tl->p_link[old_second_tl_ind].next,
-						 old_second_tl_ind = second_tl_ind
-						 
-					)
-					;
+				/* use while-loop for gdb */
+				second_tl = q->p_link[q_ind].next;
+				second_tl_ind = q->p_link[q_ind].index;
+				old_second_tl_ind = -1;
+				while (second_tl->p_link[second_tl_ind].next != q)
+				{
+					old_second_tl_ind = second_tl_ind;
+					second_tl_ind = second_tl->p_link[second_tl_ind].index;
+					second_tl = second_tl->p_link[old_second_tl_ind].next;
+				}
 				/* second tail points to head */
 				second_tl->p_link[second_tl_ind].next = q->p_link[q_ind].next;
 				second_tl->p_link[second_tl_ind].index = q->p_link[q_ind].index;
@@ -323,6 +323,18 @@ freeProc(proc_t *p)
 	/* push to `procFree_h` stack */
 	p->p_link[0].next = procFree_h.next;
 	p->p_link[0].index = 0;
+	/* reset other p attribute */
+	p->parent = (proc_t*) ENULL;
+	p->sibling = (proc_t*) ENULL;
+	p->child = (proc_t*) ENULL;
+	p->cpu_time = 0;
+	p->tdck = 0;
+	p->sys_old = (state_t*) ENULL;
+	p->sys_new = (state_t*) ENULL;
+	p->prog_old = (state_t*) ENULL;
+	p->prog_new = (state_t*) ENULL;
+	p->mm_old = (state_t*) ENULL;
+	p->mm_new = (state_t*) ENULL;
 	/* update `procFree_h` */
 	procFree_h.next = p;
 	procFree_h.index = 0;

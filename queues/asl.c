@@ -69,7 +69,7 @@ headASL(void)
  * Search in ASL for `semAdd`.
  * Returns semd_t * where ret->s_semAdd == semAdd, or ENULL if not found or ASL empty
  */
-semd_t *
+static semd_t *
 searchSemAdd(int *semAdd)
 {
 	if (headASL() == FALSE)
@@ -170,7 +170,7 @@ headBlocked(int *semAdd)
 /**
  * insert a semaphore descriptor to ASL
  */
-void
+static void
 insertSemD(semd_t *semd)
 {
 	if (headASL() == FALSE)
@@ -233,9 +233,76 @@ insertSemD(semd_t *semd)
 
 
 /**
+ * reset `semd` and give back to `semdFree_h`
+ * precondition: semd previously is in ASL
+ */
+static void
+freeSemD(semd_t *semd)
+{
+	/* reset semd attributes */
+	semd->s_next = (semd_t*) ENULL;
+	semd->s_prev = (semd_t*) ENULL;
+	semd->s_semAdd = (int*) ENULL;
+	semd->s_link.index = ENULL;
+	semd->s_link.next = (proc_t*) ENULL;
+	/* give back to `semdFree_h` */
+	if (semdFree_h != (semd_t*) ENULL)
+	{
+		semdFree_h->s_prev = semd;
+	}
+	semd->s_next = semdFree_h;
+	semdFree_h = semd;
+}
+
+
+/**
+ * if ASL becomes empty, update `semd_h`
+ * precondition: can find `semd` in ASL
+ */
+static int
+removeSemD(semd_t *semd)
+{
+	semd_t *p;
+	int looped = FALSE;
+	for (p = semd_h.head; 1; p = p->s_next)
+	{
+		if (p == semd_h.head)
+		{
+			if (looped)
+				break;
+			looped = TRUE;
+		}
+		if (p == semd)
+		{
+			if (semd->s_next == semd)
+			{
+				/* ASL has only one element */
+				semd_h.head = (semd_t*) ENULL;
+				semd_h.aslSize = 0;
+			} else
+			{
+				/* ASL has >= 2 elements */
+				semd->s_prev->s_next = semd->s_next;
+				semd->s_next->s_prev = semd->s_prev;
+				semd_h.aslSize--;
+				if (semd == semd_h.head)
+				{
+					semd_h.head = semd_h.head->s_next;
+				}
+			}
+			freeSemD(semd);
+			/* assumption: no duplicate semd_t in ASL */
+			break;
+		}
+	}
+	return 0;
+}
+
+
+/**
  * Return TRUE if there is already `p` in queue led by `tp`, otherwise FALSE
  */
-int
+static int
 pAlreadyInProcq(proc_link *tp, proc_t *p)
 {
 	if (tp->next == (proc_t*) ENULL)
@@ -320,6 +387,8 @@ insertBlocked(int *semAdd, proc_t *p)
 			return TRUE;
 		}
 		p->semvec[empty_slot] = newSemD->s_semAdd;
+		/* update qcount */
+		p->qcount++;
 		return FALSE;
 	}
 	/* `semAdd` is in ASL */
@@ -405,18 +474,7 @@ removeBlocked(int *semAdd)
 			panic("`semd_h.aslSize` now negative!");
 			return (proc_t*) ENULL;
 		}
-		/* insert into `semdFree_h` */
-		semd->s_next = semdFree_h;
-		semd->s_prev = (semd_t*) ENULL;
-		semd->s_semAdd = (int*) ENULL;
-		semd->s_link.index = ENULL;
-		semd->s_link.next = (proc_t*) ENULL;
-		/* update `semdFree_h` */
-		if (semdFree_h != (semd_t*) ENULL)
-		{
-			semdFree_h->s_prev = semd;
-		}
-		semdFree_h = semd;
+		freeSemD(semd);
 	}
 	return res;
 }
@@ -442,11 +500,53 @@ outBlocked(proc_t *p)
 		if (pAlreadyInProcq(&semd->s_link, p))
 		{
 			appears = TRUE;
-			/* removes `p` from blocked procq */
+			/* removes `p` from blocked semq */
 			outProc(&semd->s_link, p);
+			/* update sem related attribute in `p` */
+			int i;
+			for (i = 0; i < SEMMAX; i++)
+			{
+				if (p->semvec[i] == semd->s_semAdd)
+				{
+					p->semvec[i] = (int*) ENULL;
+					/* assumption: no duplicate semvec */
+					break;
+				}
+			}
+			if (i >= SEMMAX)
+			{
+				panic("asl.outBlocked: cannot find semvec where should");
+				return (proc_t*) ENULL;
+			}
 		}
 	} 
 	if (appears == FALSE)
 		return (proc_t*) ENULL;
+	/* outBlocked could result in some semd no longer active */
+	/* update ASL */
+	looped = FALSE;
+	/* potentially removing semd from ASL while looping ASL, careful looping */
+	/* find tail of ASL */
+	/* impl assumption: ASL is a loop */
+	semd_t *asl_tl;
+	for (asl_tl = semd_h.head; asl_tl->s_next != semd_h.head; asl_tl = asl_tl->s_next)
+		;
+	/* CAREFUL looping */
+	semd_t* asl_next;
+	for (semd = semd_h.head, asl_next = semd->s_next;
+		 ;
+		 semd = asl_next, asl_next = asl_next->s_next)
+	{
+		if (semd->s_link.next == (proc_t*) ENULL)
+		{
+			/* `semd` no longer active */
+			removeSemD(semd);
+		}
+		if (semd == asl_tl)
+		{
+			/* when we hit tail, we executed body and exit */
+			break;
+		}
+	}
 	return p;
 }

@@ -13,4 +13,11 @@ typedef struct aslhead_t {
 	/* int semAddVec[SEMMAX]; */
 	int aslSize;
 } aslhead_t;
+
+/* private functions */
+static semd_t * searchSemAdd(int *semAdd);
+static void insertSemD(semd_t *semd);
+static int removeSemD(semd_t *semd);
+static int pAlreadyInProcq(proc_link *tp, proc_t *p);
+static void freeSemD(semd_t* semd);
 #endif

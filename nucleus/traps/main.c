@@ -42,38 +42,22 @@ main(void)
 	
 	/* craft p1 proc_t */
 	proc_t *p1_proc = allocProc();
-	int i;
-	for (i = 0; i < SEMMAX; i++)
-	{
-		p1_proc->p_link[i].index = ENULL;
-		p1_proc->p_link[i].next = (proc_t*) ENULL;
-	}
 	p1_proc->p_s = p1_st;
-	p1_proc->qcount = 0;
-	for (i = 0; i < SEMMAX; i++)
-	{
-		p1_proc->semvec[i] = (int*) ENULL;
-	}
 	/* phase 2 stuff */
-	p1_proc->parent = (proc_t*) ENULL;
-	p1_proc->sibling = (proc_t*) ENULL;
-	p1_proc->child = (proc_t*) ENULL;
-	p1_proc->cpu_time = 0;
-	p1_proc->tdck = 0;
-	p1_proc->prog_old = (state_t*) BEGINTRAP;
-	p1_proc->prog_new = (state_t*) (BEGINTRAP + 76);
-	p1_proc->mm_old = (state_t*) (BEGINTRAP + 76*2);
-	p1_proc->mm_new = (state_t*) (BEGINTRAP + 76*3);
-	p1_proc->sys_old = (state_t*) (BEGINTRAP + 76*4);
-	p1_proc->sys_new = (state_t*) (BEGINTRAP + 76*5);
+	p1_proc->prog_old = (state_t*) ENULL;
+	p1_proc->prog_new = (state_t*) ENULL;
+	p1_proc->mm_old = (state_t*) ENULL;
+	p1_proc->mm_new = (state_t*) ENULL;
+	p1_proc->sys_old = (state_t*) ENULL;
+	p1_proc->sys_new = (state_t*) ENULL;
 	/* add p1() to RQ */
 	insertProc(&rq_tl, p1_proc);
 	/* calls schedule() */
 	schedule();
 }
 
-void
-static init(void)
+static void
+init(void)
 {
 	/* determines physical memory bound */
 	MEMORY_BOUND = d2;
@@ -86,13 +70,26 @@ static init(void)
 	intinit();
 }
 
+
 void
 schedule(void)
 {
 	if (rq_tl.next == (proc_t*) ENULL)
 	{
 		/* RQ is empty */
-		intdeadlock();
+		if (headASL() == FALSE)
+		{
+			/* no process blocked */
+			/* termination */
+			HALT();
+		} else
+		{
+			/* some process blocked */
+			/* TODO: check on pseudo clock */
+			/* deadlock */
+			intdeadlock();
+		}
+		return;
 	}
 	intschedule();
 	/* load process state at head of RQ */

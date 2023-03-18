@@ -15,15 +15,15 @@
 /**
  * post-procedure for all syscalls
  */
-int
-post_syscall(void)
+static int
+post_traphandler(void)
 {
 	/* call main.schedule() to resume back to user space */
 	schedule();
 	return 0;
 }
 
-void
+static void
 manual_resume(proc_t *running_proc)
 {
 	/* update tdck */
@@ -47,6 +47,36 @@ manual_resume(proc_t *running_proc)
 	{
 		LDST(running_proc->sys_old);
 	}
+}
+
+
+static void
+before_trap_handler(int handler_type)
+{
+	/* first things first, update interrupted process cpu time */
+	long now;
+	STCK(&now);
+	proc_t *inted_proc = headQueue(rq_tl);
+	inted_proc->cpu_time += now - inted_proc->tdck;
+	inted_proc->tdck = 0;
+	/* update proc_t.p_s: state_t */
+	state_t *inted_proc_st = (state_t*) ENULL;
+	switch (handler_type)
+	{
+	case PROGTRAP:
+		inted_proc_st = (state_t*) BEGINTRAP;
+		break;
+	case MMTRAP:
+		inted_proc_st = (state_t*) (BEGINTRAP + 76*2);
+		break;
+	case SYSTRAP:
+		inted_proc_st = (state_t*) (BEGINTRAP + 76*4);
+		break;
+	default:
+		panic("trap.before_trap_handler:invalid trap");
+		return;
+	}
+	inted_proc->p_s = *inted_proc_st;
 }
 
 
@@ -107,20 +137,40 @@ trapinit(void)
 }
 
 
-void static
+static void
 trapsyshandler(void)
 {
-	/* 9 traps */
-	/* first things first, update caller process cpu time */
-	long now;
-	STCK(&now);
+	before_trap_handler(SYSTRAP);
 	proc_t *caller_proc = headQueue(rq_tl);
-	caller_proc->cpu_time += now - caller_proc->tdck;
-	caller_proc->tdck = 0;
+	/* 9 traps */
 	/* SYS: 0x930 */
 	state_t *st_old = (state_t*) 0x930;
 	/* syscall number. from SP? in old save area state_t */
 	int syscall_num = st_old->s_tmp.tmp_sys.sys_no;
+	if (st_old->s_sr.ps_s == 0)
+	{
+		/* syscall from user process */
+		if (syscall_num < 1 || syscall_num > 8)
+		{
+			/* not sys1 to 8 */
+			/* pass */
+		} else
+		{
+			/* cause privileged instruction program trap */
+			/* DISCUSS: is this right? */
+			if (caller_proc->prog_new != (state_t*) ENULL)
+			{
+				/* called SYS5 */
+				caller_proc->prog_old->s_tmp.tmp_pr.pr_typ = PRIVILEGE;
+				LDST(caller_proc->prog_new);
+			} else
+			{
+				/* DISCUSS: what to do here? */
+				panic("trap.trapsyshandler: guess should do something");
+				return;
+			}
+		}
+	}
 	if (syscall_num == 1)
 	{
 		creatproc(st_old);
@@ -158,19 +208,48 @@ trapsyshandler(void)
 		trapsysdefault(st_old);
 	}
 	/* after syscall, resume to user space */
-	post_syscall();
+	post_traphandler();
 }
 
 
 void
 trapmmhandler(void)
 {
-	
+	before_trap_handler(MMTRAP);
+	proc_t *inted_proc = headQueue(rq_tl);
+	if (inted_proc->mm_old != (state_t*) ENULL)
+	{
+		/* called SYS5 */
+		/* copy MMTRAP_OLDAREA of physical memory to this area */
+		*inted_proc->mm_old = *(state_t*) (BEGINTRAP + 76*2);
+		LDST(inted_proc->mm_new);
+	} else
+	{
+		/* no passup vector */
+		/* terminate */
+		killproc_real(inted_proc);
+		post_traphandler();
+	}
 }
 
 
 void
 trapproghandler(void)
 {
+	before_trap_handler(PROGTRAP);
+	proc_t *inted_proc = headQueue(rq_tl);
+	if (inted_proc->prog_old != (state_t*) ENULL)
+	{
+		/* called SYS5 */
+		/* copy PROGTRAP_OLDAREA of physical memory to this area */
+		*inted_proc->prog_old = *(state_t*) BEGINTRAP;
+		LDST(inted_proc->prog_new);
+	} else
+	{
+		/* no passup vector */
+		/* terminate */
+		killproc_real(inted_proc);
+		post_traphandler();
+	}
 	
 }

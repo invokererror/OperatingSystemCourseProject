@@ -33,8 +33,9 @@ creatproc(state_t *old)
 	new_proc->child = (proc_t*) ENULL;
 	if (running_proc->child != (proc_t*) ENULL)
 	{
-		new_proc->sibling = running_proc->child->sibling;
-		running_proc->child->sibling = new_proc;
+		/* insert to sibling head */
+		new_proc->sibling = running_proc->child;
+		running_proc->child = new_proc;
 	} else
 	{
 		running_proc->child = new_proc;
@@ -47,7 +48,8 @@ creatproc(state_t *old)
 
 
 /**
- * recursively terminate process and descendents.
+ * recursively terminate process and descendents, post-order
+ * looks like in-order
  *
  * `pproc`: parent process
  */
@@ -60,8 +62,11 @@ killproc_aux(proc_t *pproc)
 	}
 	proc_t *pproc_sib = pproc->sibling;
 	proc_t *pproc_chd = pproc->child;
+	
+	killproc_aux(pproc_chd);
+	
 	/* kill pproc */
-	/* in RQ? */
+	/* try outProc from RQ? */
 	if (outProc(&rq_tl, pproc) == (proc_t*) ENULL)
 	{
 		/* not found in RQ */
@@ -82,30 +87,25 @@ killproc_aux(proc_t *pproc)
 		if (outBlocked(pproc) == (proc_t*) ENULL)
 		{
 			/* not success */
-			panic("process on RQ AND blocked by some sem!");
+			panic("process not on RQ AND not blocked by any sem!");
 			return 1;
 		}
 	} else
 	{
 		/* in RQ */
-		/* remove the process from RQ */
-		if (outProc(&rq_tl, pproc) == (proc_t*) ENULL)
-		{
-			panic("syscall.killproc_aux:`pproc` should be in RQ!");
-			return 1;
-		}
+		/* removed the process from RQ */
+		/* do nothing */
 	}
-	/* recurse */
-	killproc_aux(pproc_chd);
-	killproc_aux(pproc_sib);
 	/* update process tree */
-	/* pproc->parent->child = (proc_t*) ENULL; */
 	/* safe net. should be fine without */
 	pproc->child = (proc_t*) ENULL;
 	pproc->sibling = (proc_t*) ENULL;
 	pproc->parent = (proc_t*) ENULL;
 	/* finally kill */
 	freeProc(pproc);
+
+	killproc_aux(pproc_sib);
+
 	return 0;
 }
 
@@ -118,19 +118,24 @@ killproc_real(proc_t *p)
 {
 	proc_t *p_parent = p->parent;
 	/* dirty trick: set p->sib to ENULL to facilitate recursion */
+	proc_t *p_sib = p->sibling;
 	p->sibling = (proc_t*) ENULL;
 	killproc_aux(p);
 	/* update process tree */
 	if (p_parent == (proc_t*) ENULL)
 	{
-		/* killing p1 */
-		/* impossible since p1 is uninterruptable */
-		panic("killproc: killing p1 but should not");
+		/* p1 is killed */
+		/* no process tree structure update */
+		return 0;
+	}
+	if (p_parent->child == (proc_t*) ENULL)
+	{
+		panic("syscall:killproc_real: wrong proc tree");
 		return 1;
 	}
 	if (p_parent->child == p)
 	{
-		p_parent->child = (proc_t*) ENULL;
+		p_parent->child = p_sib;
 	} else
 	{
 		/* change sibling link adjacent to `p` */
@@ -139,7 +144,7 @@ killproc_real(proc_t *p)
 			 p_prev->sibling != p;
 			 p_prev = p_prev->sibling)
 			;
-		p_prev->sibling = p->sibling;
+		p_prev->sibling = p_sib;
 	}
 	return 0;
 }
@@ -160,8 +165,6 @@ semop(state_t *old)
 	const int d3 = old->s_r[3];
 	const int d4 = old->s_r[4];
 	proc_t *caller_process = headQueue(rq_tl);
-	/* save old area to caller process */
-	caller_process->p_s = *old;
 	/* for each vpop */
 	int i;
 	for (i = 0; i < d3; i++)
@@ -272,7 +275,7 @@ int
 trapstate(state_t *old)
 {
 	proc_t *caller_proc = headQueue(rq_tl);
-	/* repeat SYS5 call? */
+	/* repeated SYS5 call? */
 	/* partial checking */
 	if (caller_proc->sys_new != (state_t*) ENULL)
 	{
@@ -282,12 +285,28 @@ trapstate(state_t *old)
 		return 1;
 	}
 	/* main */
-	caller_proc->prog_old = (state_t*) BEGINTRAP;
-	caller_proc->prog_new = (state_t*) (BEGINTRAP + 76);
-	caller_proc->mm_old = (state_t*) (BEGINTRAP + 76*2);
-	caller_proc->mm_new = (state_t*) (BEGINTRAP + 76*3);
-	caller_proc->sys_old = (state_t*) (BEGINTRAP + 76*4);
-	caller_proc->sys_new = (state_t*) (BEGINTRAP + 76*5);
+	int trap_type = old->s_r[2];	/* d2 */
+	state_t *old_area = (state_t*) old->s_r[3];	/* d3 */
+	state_t *new_area = (state_t*) old->s_r[4];	/* d4 */
+	switch (trap_type)
+	{
+	case PROGTRAP:
+		caller_proc->prog_old = old_area;
+		caller_proc->prog_new = new_area;
+		break;
+	case MMTRAP:
+		caller_proc->mm_old = old_area;
+		caller_proc->mm_new = new_area;
+		break;
+	case SYSTRAP:
+		caller_proc->sys_old = old_area;
+		caller_proc->sys_new = new_area;
+		break;
+	default:
+		panic("syscall.trapstate:nonsense trap type passed");
+		return 1;
+		break;
+	}
 	return 0;
 }
 
@@ -312,6 +331,8 @@ trapsysdefault(state_t *old)
 	if (caller_proc->sys_new != (state_t*) ENULL)
 	{
 		/* has SYS5'ed */
+		/* store to sys_old from SYSTRAP_OLDAREA in physical memory */
+		*caller_proc->sys_old = *(state_t*) (BEGINTRAP + 76*4);
 		/* pass up */
 		LDST(caller_proc->sys_new);
 	} else

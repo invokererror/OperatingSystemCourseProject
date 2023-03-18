@@ -3,10 +3,11 @@
 
 #include "procq.h"
 void trapinit(void);
-void static trapsyshandler(void);
-void static trapmmhandler(void);
-void static trapproghandler(void);
+static void trapsyshandler(void);
+static void trapmmhandler(void);
+static void trapproghandler(void);
 /* other private functions */
-int post_syscall(void);
-void manual_resume(proc_t *running_proc);
+static int post_traphandler(void);
+static void manual_resume(proc_t *running_proc);
+static void before_trap_handler(int handler_type);
 #endif
