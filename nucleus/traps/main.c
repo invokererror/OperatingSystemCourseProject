@@ -77,18 +77,7 @@ schedule(void)
 	if (rq_tl.next == (proc_t*) ENULL)
 	{
 		/* RQ is empty */
-		if (headASL() == FALSE)
-		{
-			/* no process blocked */
-			/* termination */
-			HALT();
-		} else
-		{
-			/* some process blocked */
-			/* TODO: check on pseudo clock */
-			/* deadlock */
-			intdeadlock();
-		}
+		intdeadlock();
 		return;
 	}
 	intschedule();
@@ -103,5 +92,18 @@ schedule(void)
 	long now;
 	STCK(&now);
 	first_proc->tdck = now;
+	/* === phase 3 === */
+	/*
+	 * the process could be woken from waitforio. Immediately after it runs, it expects d2, d3 to be "returned" in old area
+	 * CAVEAT: proc_t.io_res should be cleared as soon as it is stale
+	 */
+	if (first_proc->io_res.io_sta != ENULL)
+	{
+		/* write to its p_s before it runs */
+		waitforio_write_to_proct(first_proc);
+		/* io_res inside proc_t becomes stale. clear it */
+		first_proc->io_res.io_sta = ENULL;
+		first_proc->io_res.io_len = ENULL;
+	}
 	LDST(&first_proc->p_s);
 }

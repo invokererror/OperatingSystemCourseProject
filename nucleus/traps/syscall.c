@@ -1,7 +1,7 @@
 /*
  * This code is my own work, it was written without consulting code written by other students (Yiwei Zhu)
  */
-#include "../../h/syscall.h"
+#include "../../h/syscall.e"
 #include "../../h/types.h"
 #include "../../h/procq.h"
 #include "../../h/vpop.h"
@@ -195,12 +195,6 @@ semop(state_t *old)
 					caller_process->cpu_time += now - caller_process->tdck;
 					caller_process->tdck = 0;
 					/* new head */
-				}
-				/* no new head? deadlock */
-				if (headQueue(rq_tl) == (proc_t*) ENULL)
-				{
-					panic("phase 2 deadlock");
-					return 1;
 				}
 				/* update proc_t */
 				/* caller_process->qcount++; */

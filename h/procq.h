@@ -15,7 +15,7 @@ typedef struct proc_t {
 	int qcount;	/* number of queues containing this entry */
 	int *semvec[SEMMAX];	/* vector of active semaphores for this entry */
 	/* plus other entries to be added by you later */
-	/* phase 2 */
+	/* === phase 2 === */
 	/* process tree - 3-pointer approach */
 	struct proc_t *parent;
 	struct proc_t *sibling;	/* forms linked list of children of its parent */
@@ -27,6 +27,8 @@ typedef struct proc_t {
 	state_t *sys_old, *sys_new;
 	state_t *prog_old, *prog_new;
 	state_t *mm_old, *mm_new;
+	/* === phase 3 === */
+	iores_t io_res;
 } proc_t;
 
 #endif

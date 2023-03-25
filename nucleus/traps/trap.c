@@ -4,7 +4,7 @@
 
 #include "../../h/trap.h"
 #include "../../h/traps.e"
-#include "../../h/syscall.h"
+#include "../../h/syscall.e"
 #include "../../h/int.e"
 #include "../../h/util.h"
 
@@ -57,6 +57,11 @@ before_trap_handler(int handler_type)
 	long now;
 	STCK(&now);
 	proc_t *inted_proc = headQueue(rq_tl);
+	if (inted_proc == (proc_t*) ENULL)
+	{
+		panic("trap.before_trap_handler: empty RQ. could due to deadlock");
+		return;
+	}
 	inted_proc->cpu_time += now - inted_proc->tdck;
 	inted_proc->tdck = 0;
 	/* update proc_t.p_s: state_t */
@@ -80,6 +85,21 @@ before_trap_handler(int handler_type)
 }
 
 
+/**
+ * return sys trap old area location from `p`
+ * default if no SYS5
+ */
+static state_t * proc_sys_old(proc_t *p)
+{
+	state_t *old = (state_t*) 0x930;
+	if (p->sys_old != (state_t*) ENULL)
+	{
+		old = p->sys_old;
+	}
+	return old;
+}
+
+
 void
 trapinit(void)
 {
@@ -99,15 +119,6 @@ trapinit(void)
 	*(int*) 0xac = (int) STLDSYS15;
 	*(int*) 0xb0 = (int) STLDSYS16;
 	*(int*) 0xb4 = (int) STLDSYS17;
-	*(int*) 0x100 = (int) STLDTERM0;
-	*(int*) 0x104 = (int) STLDTERM1;
-	*(int*) 0x108 = (int) STLDTERM2;
-	*(int*) 0x10c = (int) STLDTERM3;
-	*(int*) 0x110 = (int) STLDTERM4;
-	*(int*) 0x114 = (int) STLDPRINT0;
-	*(int*) 0x11c = (int) STLDDISK0;
-	*(int*) 0x12c = (int) STLDFLOPPY0;
-	*(int*) 0x140 = (int) STLDCLOCK;
 	/* set new areas for traps */
 	state_t st;
 	int i;
@@ -144,7 +155,7 @@ trapsyshandler(void)
 	proc_t *caller_proc = headQueue(rq_tl);
 	/* 9 traps */
 	/* SYS: 0x930 */
-	state_t *st_old = (state_t*) 0x930;
+	state_t *st_old = (state_t*) 0x930;	/* TODO: could be wrong with sys5'ed process, but doing this the right way breaks phase 2, and i do not want that */
 	/* syscall number. from SP? in old save area state_t */
 	int syscall_num = st_old->s_tmp.tmp_sys.sys_no;
 	if (st_old->s_sr.ps_s == 0)
@@ -178,6 +189,7 @@ trapsyshandler(void)
 		 * instead of schedule() like others, resume to user space manually
 		 */
 		manual_resume(caller_proc);
+		return;
 	} else if (syscall_num == 2)
 	{
 		killproc(st_old);
@@ -197,12 +209,28 @@ trapsyshandler(void)
 		 * instead of schedule() like others, resume to user space manually
 		 */
 		manual_resume(caller_proc);
+		return;
 	} else if (syscall_num == 7)
 	{
 		waitforpclock(st_old);
 	} else if (syscall_num == 8)
 	{
 		waitforio(st_old);
+		if (caller_proc->io_res.io_sta == ENULL)
+		{
+			/* nothing after `waitforio` -> interrupt not happened yet => normal case */
+			/* then should have been blocked and call schedule() */
+			schedule();
+		} else
+		{
+			/*
+			 * has something after `waitforio`
+			 * => weird case where `waitforio` pass from nucleus-saved compl_st
+			 * no blocking, no (need) schedule()
+			 */
+			manual_resume(caller_proc);
+		}
+		return;
 	} else
 	{
 		trapsysdefault(st_old);
