@@ -518,7 +518,7 @@ p5a()
 
 	/* if p4 and offspring are really dead, this will increment blkp4 */
 	r4 = (int)&blkp4;
-	DO_VERHOGEN(r4);			/* P(blkp4) */
+	DO_VERHOGEN(r4);			/* V(blkp4) */
 
 	r4 = (int)&endp5;
 	DO_VERHOGEN(r4);			/* V(endp5) */

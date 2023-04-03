@@ -3,4 +3,7 @@ queue.e
 queue.c
 grade*
 README
-screen-exchange
+screen-*
+deadlock-session
+nucleus/interrupts/*
+!nucleus/interrupts/*.c

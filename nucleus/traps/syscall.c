@@ -221,26 +221,37 @@ semop(state_t *old)
 			/* sem_q_hd->qcount--; */
 			/* removeSemvec(sem_q_hd, vp->sem); */
 			/* put onto RQ if no sem blocking */
+			/*
+			 * stronger test
+			 * assumption: not on RQ
+			 * qcount == 0 <==> semvec all -1
+			 */
+			int i;
+			#ifndef NDEBUG
+			/* potential side-effect if outProc is wrong */
+			if (outProc(&rq_tl, sem_q_hd) != (proc_t*) ENULL)
+			{
+				panic("syscall.VERHOGEN: removed process from semq on RQ?!");
+			}
+			#endif
+			int all_or_nothing = 0;
+			all_or_nothing += (sem_q_hd->qcount == 0);
+			int semvec_all_enull = 1;
+			for (i = 0; i < SEMMAX; i++)
+			{
+				if (sem_q_hd->semvec[i] != (int*) ENULL)
+				{
+					semvec_all_enull = 0;
+					break;
+				}
+			}
+			all_or_nothing += semvec_all_enull;
+			if (all_or_nothing != 0 && all_or_nothing != 2)
+			{
+				panic("qcount and semvec async");
+			}
 			if (sem_q_hd->qcount == 0)
 			{
-				/* safe net */
-				#ifndef NDEBUG
-				int assert_pass = 1;
-				int i;
-				for (i = 0; i < SEMMAX; i++)
-				{
-					if (sem_q_hd->semvec[i] != (int*) ENULL)
-					{
-						assert_pass = 0;
-						break;
-					}
-				}
-				if (!assert_pass)
-				{
-					panic("assert fail: semvec not in sync with qcount");
-					return 1;
-				}
-				#endif
 				/* put onto RQ */
 				insertProc(&rq_tl, sem_q_hd);
 			}

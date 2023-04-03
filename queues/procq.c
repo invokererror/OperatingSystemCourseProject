@@ -55,6 +55,9 @@ initProc(void)
 		procTable[i].prog_new = (state_t*) ENULL;
 		procTable[i].mm_old = (state_t*) ENULL;
 		procTable[i].mm_new = (state_t*) ENULL;
+		/* phase 3 addition */
+		procTable[i].io_res.io_sta = ENULL;
+		procTable[i].io_res.io_len = ENULL;
 	}
 	procTable[MAXPROC-1].p_link[0].next = (proc_t *) ENULL;
 	procTable[MAXPROC-1].p_link[0].index = 0;
@@ -70,19 +73,22 @@ initProc(void)
 	for (j = 0; j < SEMMAX; j++)
 	{
 		procTable[MAXPROC-1].semvec[j] = (int*) ENULL;
-		/* phase 2 addition */
-		procTable[MAXPROC-1].parent = (proc_t*) ENULL;
-		procTable[MAXPROC-1].sibling = (proc_t*) ENULL;
-		procTable[MAXPROC-1].child = (proc_t*) ENULL;
-		procTable[MAXPROC-1].cpu_time = 0L;
-		procTable[MAXPROC-1].tdck = 0L;
-		procTable[MAXPROC-1].sys_old = (state_t*) ENULL;
-		procTable[MAXPROC-1].sys_new = (state_t*) ENULL;
-		procTable[MAXPROC-1].prog_old = (state_t*) ENULL;
-		procTable[MAXPROC-1].prog_new = (state_t*) ENULL;
-		procTable[MAXPROC-1].mm_old = (state_t*) ENULL;
-		procTable[MAXPROC-1].mm_new = (state_t*) ENULL;
 	}
+	/* phase 2 addition */
+	procTable[MAXPROC-1].parent = (proc_t*) ENULL;
+	procTable[MAXPROC-1].sibling = (proc_t*) ENULL;
+	procTable[MAXPROC-1].child = (proc_t*) ENULL;
+	procTable[MAXPROC-1].cpu_time = 0L;
+	procTable[MAXPROC-1].tdck = 0L;
+	procTable[MAXPROC-1].sys_old = (state_t*) ENULL;
+	procTable[MAXPROC-1].sys_new = (state_t*) ENULL;
+	procTable[MAXPROC-1].prog_old = (state_t*) ENULL;
+	procTable[MAXPROC-1].prog_new = (state_t*) ENULL;
+	procTable[MAXPROC-1].mm_old = (state_t*) ENULL;
+	procTable[MAXPROC-1].mm_new = (state_t*) ENULL;
+	/* phase 3 addition */
+	procTable[MAXPROC-1].io_res.io_len = ENULL;
+	procTable[MAXPROC-1].io_res.io_sta = ENULL;
 	/* init `procFree_h` */
 	procFree_h.next = &procTable[0];
 	procFree_h.index = 0;
@@ -335,6 +341,22 @@ freeProc(proc_t *p)
 	p->prog_new = (state_t*) ENULL;
 	p->mm_old = (state_t*) ENULL;
 	p->mm_new = (state_t*) ENULL;
+	/* phase 3 */
+	p->io_res.io_len = ENULL;
+	p->io_res.io_sta = ENULL;
+	/* more reset from phase 3 deadlock apocalypse */
+	int i;
+	for (i = 1; i <= SEMMAX-1; i++)
+	{
+		p->p_link[i].next = (proc_t*) ENULL;
+		p->p_link[i].index = ENULL;
+	}
+	/* no freeing proc_t.state_t in fear */
+	p->qcount = 0;
+	for (i = 0; i < SEMMAX; i++)
+	{
+		p->semvec[i] = (int*) ENULL;
+	}
 	/* update `procFree_h` */
 	procFree_h.next = p;
 	procFree_h.index = 0;

@@ -155,7 +155,7 @@ trapsyshandler(void)
 	proc_t *caller_proc = headQueue(rq_tl);
 	/* 9 traps */
 	/* SYS: 0x930 */
-	state_t *st_old = (state_t*) 0x930;	/* TODO: could be wrong with sys5'ed process, but doing this the right way breaks phase 2, and i do not want that */
+	state_t *st_old = (state_t*) 0x930;	/* might actually intended regardless of SYS5'd process */
 	/* syscall number. from SP? in old save area state_t */
 	int syscall_num = st_old->s_tmp.tmp_sys.sys_no;
 	if (st_old->s_sr.ps_s == 0)

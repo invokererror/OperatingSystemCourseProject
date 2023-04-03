@@ -3,6 +3,7 @@
  * This code is my own work, it was written without consulting code written by other students (Yiwei Zhu)
  */
 
+#include <stdio.h>
 #include "../../h/const.h"
 #include "../../h/moreconst.h"
 #include "../../h/types.h"
@@ -444,15 +445,23 @@ inthandler(int devtype, int devnum)
 	if (waitforio_signal_received[devnum_abs] == TRUE)
 	{
 		/* normal case: interrupt happen after SYS8 */
-		/* V(devsem) */
-		intsemop(&devsem[devnum_abs], UNLOCK);	/* should unblock waiting process and put at tail of queue */
-		/* get that process */
-		proc_t *waiting_p = rq_tl.next;
-		if (waiting_p == (proc_t*) ENULL)
+		/* then the waiting process must be head of devsem queue */
+		if (devsem[devnum_abs] >= 0)
 		{
-			panic("int.inthandler: should exist process waiting for io completion");
+			char msgbuf[50];
+			sprintf(msgbuf, "int.inthandler: normal case but devnum %d sem value nonnegative", devnum_abs);
+			panic(msgbuf);
 			return;
 		}
+		/* determining waiting proc **before** intsemop, otherwise lose track of waiting proc */
+		proc_t *waiting_p = headBlocked(&devsem[devnum_abs]);
+		if (waiting_p == (proc_t*) ENULL)
+		{
+			panic("int.inthandler: normal case but no process blocked by dev sem!");
+			return;
+		}
+		/* V(devsem) */
+		intsemop(&devsem[devnum_abs], UNLOCK);	/* unblock but not necessarily put on RQ */
 		/* assumption: devreg in-memory is fresh */
 		/* pass completion status directly to process, no need to save */
 		if (waiting_p->io_res.io_sta != ENULL)
@@ -557,7 +566,13 @@ intsemop(int *semAdd, int semop)
 		proc_t *maybe_blocked;
 		if ((maybe_blocked = removeBlocked(semAdd)) != (proc_t*) ENULL)
 		{
-			insertProc(&rq_tl, maybe_blocked);
+			/* indeed some process blocked */
+			if (maybe_blocked->qcount == 0)
+			{
+				/* no other sem blocking */
+				/* put on RQ */
+				insertProc(&rq_tl, maybe_blocked);
+			}
 		}
 		break;
 	default:
