@@ -1,0 +1,8 @@
+ "===nucleus data===\nstartd0: 0x165c8\nendd0: 0x165c8\n===sl data===\nstartd1: 0x167c8\nedata: 0x1709c\n===nucleus BSS===\nstartb0: 0x1729c\nendb0: 0x17394\n===sl BSS===\nstartb1: 0x17594\nend: 0x1da0c\n", '\000' <repeats 1857 times>
+(emacsim) pbd
+nucleus text:
+start: 0x1600
+endt0: 0x4a6c	37
+sl text:
+startt1: 0x4c6c
+etext: 0x131a6

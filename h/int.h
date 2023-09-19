@@ -29,7 +29,6 @@ static void intclockhandler(void);
 static void intsemop(int *semAdd, int semop);
 static void sleep(void);
 /* === utility function === */
-static devreg_t * dev_reg_loc(int devnum);
 static int dev_type(int devnum);
 static int abs_dev_num(int devtype, int devnum);
 static state_t * interrupt_vector_area(int devtype);

@@ -9,12 +9,6 @@
 #include "../../h/utils.e"
 #include "../../util/utils.c"
 
-/* register int d2 asm("%d2"); */
-/* register int d3 asm("%d3"); */
-/* register int d4 asm("%d4"); */
-
-
-
 
 int
 creatproc(state_t *old)
@@ -333,11 +327,20 @@ trapsysdefault(state_t *old)
 	 * if SYS5'ed, then LDST sys_new
 	 */
 	proc_t *caller_proc = headQueue(rq_tl);
+	long now;
 	if (caller_proc->sys_new != (state_t*) ENULL)
 	{
 		/* has SYS5'ed */
 		/* store to sys_old from SYSTRAP_OLDAREA in physical memory */
 		*caller_proc->sys_old = *(state_t*) (BEGINTRAP + 76*4);
+		 /* before pass up, set tdck, since same process continuing */
+		if (caller_proc->tdck != 0L)
+		{
+			panic("syscall.trapsysdefault: caller proc's tdck not reset");
+			return 1;
+		}
+		STCK(&now);
+		caller_proc->tdck = now;
 		/* pass up */
 		LDST(caller_proc->sys_new);
 	} else

@@ -9,4 +9,6 @@ extern void intdeadlock(void);
 extern void intschedule(void);
 /* nucleus module functions */
 extern void waitforio_write_to_proct(proc_t *inted_p);
+/* support level functions */
+extern devreg_t * dev_reg_loc(int devnum);
 #endif

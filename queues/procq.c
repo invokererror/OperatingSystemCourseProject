@@ -19,9 +19,6 @@ proc_link procFree_h;
 proc_t procTable[MAXPROC];
 
 
-/**
- * Initialize the procFree list to contain all the elements of the array procTable. Will be called only once during data structure initialization.
- */
 void
 initProc(void)
 {
@@ -95,9 +92,6 @@ initProc(void)
 }
 
 
-/**
- * Return ENULL if the procFree list is empty. Otherwise, remove an element from the procFree list and return a pointer to it.
- */
 proc_t *
 allocProc(void)
 {
@@ -113,9 +107,6 @@ allocProc(void)
 }
 
 
-/**
- * Insert the element pointed to by p into the process queue where tp contains the pointer/index to the tail (last element). Update the tail pointer accordingly. If the process is already in SEMMAX queues, call the panic function.
- */
 void
 insertProc(proc_link *tp, proc_t *p)
 {
@@ -182,9 +173,6 @@ insertProc(proc_link *tp, proc_t *p)
 }
 
 
-/**
- * Remove the first element from the process queue whose tail is pointed to by tp. Return ENULL if the queue was initially empty, otherwise return the pointer to the removed element. Update the pointer to the tail of the queue if necessary.
- */
 proc_t *
 removeProc(proc_link *tp)
 {
@@ -224,9 +212,6 @@ removeProc(proc_link *tp)
 }
 
 
-/**
- * Remove the process table entry pointed to by p from the queue whose tail is pointed to by tp. Update the pointer to the tail of the queue if necessary. If the desired entry is not in the defined queue (an error condition), return ENULL. Otherwise, return p. Note that p can point to any element of the queue (not necessarily the head element).
- */
 proc_t *
 outProc(proc_link *tp, proc_t *p)
 {
@@ -314,18 +299,10 @@ outProc(proc_link *tp, proc_t *p)
 	return (proc_t*) ENULL;
 }
 
-/**
- * Return the element pointed to by p into the procFree list.
- */
 void
 freeProc(proc_t *p)
 {
 	/* `p` should not reside in any process queue */
-	/* size_t i; */
-	/* for (i = 0; i < SEMMAX; i++) */
-	/* { */
-	/* 	assert(p->p_link[i].next == (proc_t*) ENULL); */
-	/* } */
 	/* push to `procFree_h` stack */
 	p->p_link[0].next = procFree_h.next;
 	p->p_link[0].index = 0;
@@ -363,9 +340,6 @@ freeProc(proc_t *p)
 }
 
 
-/**
- * Return a pointer to the process table entry at the head of the queue. The tail of the queue is pointed to by tp.
- */
 proc_t *
 headQueue(proc_link tp)
 {

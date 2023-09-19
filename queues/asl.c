@@ -54,10 +54,6 @@ initSemd(void)
 }
 
 
-/**
- * Return FALSE if the ASL is empty or TRUE if not empty
- * Used to determine if there are any semaphores on ASL
- */
 int
 headASL(void)
 {
@@ -96,10 +92,6 @@ searchSemAdd(int *semAdd)
 }
 
 
-/**
- * Return a pointer to the process table entry that is at the head of the process queue associated with semaphore `semAdd`
- * If the list is empty, return ENULL
- */
 proc_t *
 headBlocked(int *semAdd)
 {
@@ -111,7 +103,6 @@ headBlocked(int *semAdd)
 		/* `semAdd` not in ASL */
 		return (proc_t*) ENULL;
 	}
-	/* `semd->s_semAdd == semAdd` */
 	if (semd->s_semAdd != semAdd)
 	{
 		panic("Incorrect implementation of searchSemAdd!");
@@ -126,46 +117,10 @@ headBlocked(int *semAdd)
 
 
 /**
- * Abandoned
+ * Abandoned. Causing weird SIGILL
  * Binary search on ASL to locate `semAdd`.
  * Return its position or -1 if not found.
  */
-/* int */
-/* searchSemAdd(int *semAdd) */
-/* { */
-	/* cause weird SIGILL */
-	/* int left_ind = 0, right_ind = semd_h.aslSize-1; */
-	/* int mid; */
-	/* while (left_ind <= right_ind) */
-	/* { */
-	/* 	mid = (left_ind + right_ind) / 2; */
-	/* 	if (*semAdd == semd_h.semAddVec[mid]) */
-	/* 	{ */
-	/* 		return mid; */
-	/* 	} */
-	/* 	if (*semAdd < semd_h.semAddVec[mid]) */
-	/* 	{ */
-	/* 		right_ind = mid-1; */
-	/* 		continue; */
-	/* 	} */
-	/* 	/\* *semAdd > semd_h.semAddVec[mid] *\/ */
-	/* 	left_ind = mid+1; */
-	/* 	continue; */
-	/* } */
-	/* return -1; */
-
-	/* try linear search */
-	/* int i; */
-	/* for (i = 0; i < SEMMAX; i++) */
-	/* { */
-	/* 	if (*semAdd == semd_h.semAddVec[i]) */
-	/* 	{ */
-	/* 		return i; */
-	/* 	} */
-	/* } */
-	/* return -1; */
-/* 	return -1; */
-/* } */
 
 /**
  * insert a semaphore descriptor to ASL
@@ -333,9 +288,6 @@ pAlreadyInProcq(proc_link *tp, proc_t *p)
 }
 
 
-/**
- * Insert the process table entry pointed to by p at the tail of the process queue associated with the semaphore whose address is semAdd. If the semaphore is currently not active (there is no descriptor for it in the ASL), allocate a new descriptor from the free list, insert it in the ASL (at the appropriate position), and initialize all of the fields. If a new semaphore descriptor needs to be allocated and the free list is empty, return TRUE. In all other cases return FALSE.
- */
 int
 insertBlocked(int *semAdd, proc_t *p)
 {
@@ -420,9 +372,6 @@ insertBlocked(int *semAdd, proc_t *p)
 }
 
 
-/**
- * Search the ASL for a descriptor of this semaphore. If none is found, return ENULL. Otherwise, remove the first process table entry from the process queue of the appropriate semaphore descriptor and return a pointer to it. If the process queue for this semaphore becomes empty, remove the descriptor from the ASL and insert it in the free list of semaphore descriptors.
- */
 proc_t *
 removeBlocked(int *semAdd)
 {
@@ -480,9 +429,6 @@ removeBlocked(int *semAdd)
 }
 
 
-/**
- * Remove the process table entry pointed to by p from the queues associated with the appropriate semaphore on the ASL. If the desired entry does not appear in any of the process queues (an error condition), return ENULL. Otherwise, return p.
- */
 proc_t *
 outBlocked(proc_t *p)
 {

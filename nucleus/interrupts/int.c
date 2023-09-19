@@ -3,7 +3,6 @@
  * This code is my own work, it was written without consulting code written by other students (Yiwei Zhu)
  */
 
-#include <stdio.h>
 #include "../../h/const.h"
 #include "../../h/moreconst.h"
 #include "../../h/types.h"
@@ -19,9 +18,8 @@
 /* === utility functions === */
 /**
  * Returns pointer to device register in memory
- * @param devnum device number
  */
-static devreg_t * dev_reg_loc(int devnum)
+devreg_t * dev_reg_loc(int devnum)
 {
 	return (devreg_t*) (BEGINDEVREG + 0x10 * devnum);
 }
@@ -197,11 +195,6 @@ manual_resume_from_interrupt(int devtype)
 }
 
 
-/**
- * loads several entries in the EVT
- * sets the new areas for the interrupts
- * defines the locations of the device registers
- */
 void
 intinit(void)
 {
@@ -262,9 +255,6 @@ intinit(void)
 }
 
 
-/**
- * does an intsemop(LOCK) on a global variable called pseudoclock
- */
 void
 waitforpclock(state_t *old)
 {
@@ -272,9 +262,6 @@ waitforpclock(state_t *old)
 }
 
 
-/**
- * This function first checks if the interrupt already occurred. If it has it decrements the semaphore and passes the completion status to the process. Otherwise this function does an intsemop(LOCK) on the semaphore corresponding to each device.
- */
 void
 waitforio(state_t *old)
 {
@@ -324,9 +311,6 @@ waitforio(state_t *old)
 
 /**
  * This function is called when the RQ is empty.
- * If there are processes blocked on the pseudoclock, it calls intschedule() and it goes to sleep.
- * If there are processes blocked on the I/O semaphores it goes to sleep. If there are no processes left it shut down normally and it prints a normal termination message.
- * Otherwise it prints a deadlock message.
  */
 void
 intdeadlock(void)
@@ -374,9 +358,6 @@ intdeadlock(void)
 }
 
 
-/**
- * This functions simply loads the timeslice into the Interval Timer.
- */
 void
 intschedule(void)
 {
@@ -415,7 +396,8 @@ static void
 intdiskhandler(void)
 {
 	state_t *old = (state_t*) 0xaf8;
-	int devtype = old->s_tmp.tmp_int.in_dev;
+/* int devtype = old->s_tmp.tmp_int.in_dev; */
+	int devtype = DISK;
 	int devnum = old->s_tmp.tmp_int.in_dno;
 	inthandler(devtype, devnum);
 }
@@ -425,15 +407,13 @@ static void
 intfloppyhandler(void)
 {
 	state_t *old = (state_t*) 0xb90;
-	int devtype = old->s_tmp.tmp_int.in_dev;
+	/* int devtype = old->s_tmp.tmp_int.in_dev; */
+	int devtype = FLOPPY;
 	int devnum = old->s_tmp.tmp_int.in_dno;
 	inthandler(devtype, devnum);
 }
 
 
-/**
- * This function saves the completion status if a wait_for_io call has not been received, or it does an intsemop(UNLOCK) on the semaphore corresponding to a device.
- */
 static void
 inthandler(int devtype, int devnum)
 {
@@ -448,9 +428,10 @@ inthandler(int devtype, int devnum)
 		/* then the waiting process must be head of devsem queue */
 		if (devsem[devnum_abs] >= 0)
 		{
-			char msgbuf[50];
-			sprintf(msgbuf, "int.inthandler: normal case but devnum %d sem value nonnegative", devnum_abs);
-			panic(msgbuf);
+			/* char msgbuf[50]; */
+			/* sprintf(msgbuf, "int.inthandler: normal case but devnum %d sem value nonnegative", devnum_abs); */
+			/* panic(msgbuf); */
+			panic("???");
 			return;
 		}
 		/* determining waiting proc **before** intsemop, otherwise lose track of waiting proc */
@@ -476,6 +457,10 @@ inthandler(int devtype, int devnum)
 	} else
 	{
 		/* weird case: interrupt faster than SYS8 */
+		/* incr devsem[devnum] to maintain seemingly normal sem value
+		 * but i did not use sem value to decide whether normal case or weird case
+		 */
+		(devsem[devnum_abs])++;
 		/* nucleus, save the completion status */
 		dev_compl_st[devnum_abs].io_sta = dr->d_stat;
 		dev_compl_st[devnum_abs].io_len = (devtype == TERMINAL || devtype == PRINTER) ? dr->d_amnt : ENULL;
@@ -502,10 +487,6 @@ inthandler(int devtype, int devnum)
 }
 
 
-/**
- * If the RQ is not empty, this function removes the process at the head of the queue and it then adds it to the tail of the queue.
- * This function does an intsemop(UNLOCK) on the pseudoclock semaphore if necessary and then it calls schedule() to begin the execution of the process at the head of the RQ.
- */
 static void
 intclockhandler(void)
 {
@@ -534,9 +515,6 @@ intclockhandler(void)
 }
 
 
-/**
- * This function is similar to the semop call in the first part. It has two arguments, the address of a semaphore (instead of a state_t), and the operation. This function should use the ASL and should call insertBlocked and removeBlocked.
-*/
 static void
 intsemop(int *semAdd, int semop)
 {
@@ -584,7 +562,6 @@ intsemop(int *semAdd, int semop)
 
 /**
  * This function is called when the RQ is empty.
- * This function could enable interrupts and enter an infinite loop, or it could execute the "stop" assembly instruction. From C call the asm("stop #0x2000") instruction which loads 0x2000 into the status register, i.e. it enables interrupts and sets supervisor mode, and then the CPU halts until an interrupt occurs. The simulator runs much faster if stop is used.
  */
 static void
 sleep(void)

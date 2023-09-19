@@ -4,10 +4,10 @@
 
 #ifndef PANIC_C
 #define PANIC_C
-char myerrbuf[128];
+static char myerrbuf[128];
 
-panic(s)
-register char *s;
+void
+panic(register char *s)
 {
 	register char *i=myerrbuf;
 

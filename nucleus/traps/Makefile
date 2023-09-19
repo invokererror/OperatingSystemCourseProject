@@ -3,7 +3,7 @@ BIN=/home/ubuntu16/emacsimdir/bin
 UTIL=/home/cs580000/share/hoca/util
 
 GCC=$(BIN)/m68k-elf-gcc
-GCC_FLAGS=-m68000 -I$(UTIL)/inc/ -I$(UTIL)/inc/m68k-linux-gnu -g -O0 -gstabs -c
+GCC_FLAGS=-m68000 -I$(UTIL)/inc/ -I$(UTIL)/inc/m68k-linux-gnu -g -gstabs -c
 
 LD=$(BIN)/m68k-elf-ld
 LD_FLAGS=-L$(UTIL)/lib -L$(BIN)/../lib/gcc/m68k-elf/4.8.2/m68000 -Ttext=0x1600

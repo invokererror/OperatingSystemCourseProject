@@ -245,11 +245,20 @@ trapmmhandler(void)
 {
 	before_trap_handler(MMTRAP);
 	proc_t *inted_proc = headQueue(rq_tl);
+	long now;
 	if (inted_proc->mm_old != (state_t*) ENULL)
 	{
 		/* called SYS5 */
 		/* copy MMTRAP_OLDAREA of physical memory to this area */
 		*inted_proc->mm_old = *(state_t*) (BEGINTRAP + 76*2);
+		 /* before pass up, set tdck, since same process continuing */
+		if (inted_proc->tdck != 0L)
+		{
+			panic("trap.trapmmhandler: caller proc's tdck not reset");
+			return 1;
+		}
+		STCK(&now);
+		inted_proc->tdck = now;
 		LDST(inted_proc->mm_new);
 	} else
 	{
@@ -266,11 +275,21 @@ trapproghandler(void)
 {
 	before_trap_handler(PROGTRAP);
 	proc_t *inted_proc = headQueue(rq_tl);
+	long now;
 	if (inted_proc->prog_old != (state_t*) ENULL)
 	{
 		/* called SYS5 */
 		/* copy PROGTRAP_OLDAREA of physical memory to this area */
 		*inted_proc->prog_old = *(state_t*) BEGINTRAP;
+		/* before pass up, set tdck, since same process continuing */
+		if (inted_proc->tdck != 0L)
+		{
+			panic("trap.trapproghandler: caller proc's tdck not reset");
+			return 1;
+		}
+		STCK(&now);
+		inted_proc->tdck = now;
+
 		LDST(inted_proc->prog_new);
 	} else
 	{
